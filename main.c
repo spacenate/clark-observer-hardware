@@ -18,6 +18,10 @@
 #define CUSTOM_RX_STATUS_UNREAD 0x04
 #define CUSTOM_RX_CONFIRM 0x22
 
+volatile uint8_t timerFlag;
+uint8_t currentStatus;
+uint8_t newStatus;
+
 /* ---------------------- Interface with V-USB driver ---------------------- */
 
 usbMsgLen_t usbFunctionSetup(uchar data[8])
@@ -28,19 +32,14 @@ uint8_t msgLen = 0;
 
     switch (request->bRequest) {
         case CUSTOM_RX_STATUS_OFF:
-        case CUSTOM_RX_STATUS_UNAVAIL:
-            PORTB |= (1 << PB1);
-            outputBuffer[0] = CUSTOM_RX_CONFIRM;
-            outputBuffer[1] = request->bRequest;
-            msgLen = 2;
-            break;
-
         case CUSTOM_RX_STATUS_AVAIL:
+        case CUSTOM_RX_STATUS_UNAVAIL:
         case CUSTOM_RX_STATUS_MAXCHATS:
         case CUSTOM_RX_STATUS_UNREAD:
-            PORTB &= ~(1 << PB1);
+            newStatus = 1;
+            currentStatus = request->bRequest;
             outputBuffer[0] = CUSTOM_RX_CONFIRM;
-            outputBuffer[1] = request->bRequest;
+            outputBuffer[1] = currentStatus;
             msgLen = 2;
             break;
 
@@ -80,11 +79,25 @@ uchar trialCal, bestCal, step, region;
     OSCCAL = bestCal;
 }
 
+/* --------------------------------- Timer0 ---------------------------------- */
+
+ISR(TIMER0_COMPA_vect)
+{
+	// set PWM flag
+	timerFlag++;
+}
+
 /* --------------------------------- Main ---------------------------------- */
 
 int main(void)
 {
 uchar i;
+
+	TCCR0A = (1 << WGM01);             // CTC mode
+	TCCR0B = (1 << CS00 | 1 << CS02);  // clock/1024
+	OCR0A  = 0xFF;    		   // 15.8ms compare value ~63Hz
+	TIMSK |= (1 << OCIE0A);            // Enable interrupt
+        /* clock/256 + compare value 64 for 991Hz PWM signal */
 
     usbInit();
     usbDeviceDisconnect();
@@ -99,6 +112,31 @@ uchar i;
     for(;;){
         wdt_reset();
         usbPoll();
+        if (newStatus == 1) {
+            newStatus = 0;
+            switch (currentStatus) {
+                /* Just turn off the LED for now */
+                case CUSTOM_RX_STATUS_OFF:
+                case CUSTOM_RX_STATUS_AVAIL:
+                case CUSTOM_RX_STATUS_UNAVAIL:
+                case CUSTOM_RX_STATUS_MAXCHATS:
+                    PORTB |= (1 << PB1);
+                    break;
+                default:
+                    break;
+            }
+        }
+        switch (currentStatus) {
+            case CUSTOM_RX_STATUS_UNREAD:
+                if (timerFlag == 30) {
+                    // 255 = ~3 seconds? doesn't seem to match OCR0A...
+                    timerFlag = 0;
+                    PORTB ^= (1 << PB1);
+                }
+                break;
+            default:
+                break;
+        }
     }
     return 0;
 }
