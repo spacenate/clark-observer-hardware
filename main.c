@@ -122,6 +122,10 @@ uchar i;
                 case CUSTOM_RX_STATUS_MAXCHATS:
                     PORTB |= (1 << PB1);
                     break;
+                case CUSTOM_RX_STATUS_UNREAD:
+                    PORTB &= ~(1 << PB1);
+                    timerFlag = 0;
+                    break;
                 default:
                     break;
             }
