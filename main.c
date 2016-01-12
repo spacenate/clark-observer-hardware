@@ -18,7 +18,21 @@
 #define CUSTOM_RX_STATUS_UNREAD 0x04
 #define CUSTOM_RX_CONFIRM 0x22
 
-volatile uint8_t timerFlag;
+volatile uint8_t fadeTick;
+void (* fadeFunction)(void);
+uint8_t fadeValue;
+uint8_t fadePhase;
+uint8_t pauseValue;
+
+#define BREATHE_INCREASE 2     //  0b10
+#define BREATHE_DECREASE -1    // -0b01
+#define BREATHE_PAUSE 0        //  0b00
+#define BREATHE_MIN 25
+#define BREATHE_MAX 145
+#define BREATHE_PAUSE_DURATION 140
+
+#define FLASH_DURATION 40
+
 uint8_t currentStatus;
 uint8_t newStatus;
 
@@ -79,12 +93,81 @@ uchar trialCal, bestCal, step, region;
     OSCCAL = bestCal;
 }
 
-/* --------------------------------- Timer0 ---------------------------------- */
+/* ---------------------------- LED functions ------------------------------ */
 
-ISR(TIMER0_COMPA_vect)
+void toggleLED(void)
 {
-	// set PWM flag
-	timerFlag++;
+    PORTB ^= (1 << PB1);
+}
+
+void turnOffLED(void)
+{
+    PORTB |= (1 << PB1);
+}
+
+void enablePWM(void)
+{
+    cli();
+    TCCR0A |= (1 << WGM01 | 1 << WGM00);  // Fast PWM mode
+    TCCR0A |= (1 << COM0B1 | 1 << COM0B0); // Inverting mode
+    TCCR0B |= (1 << CS02 | 1 << CS00);   // clock/1024 ~60Hz
+    OCR0B = 0;
+    sei();
+}
+
+void setPWMDutyCycle(uint8_t dutyCycle) {
+    OCR0B = dutyCycle;
+}
+
+void disablePWM(void)
+{
+    TCCR0A = 0;
+}
+
+void enableFade(void)
+{
+    cli();
+    TCCR1 |= (1 << CS13 | 1 << CS11 | 1 << CS10); // clock/1024 ~60Hz
+    TIMSK = (1 << TOIE1); // enable overflow interrupt
+    sei();
+}
+
+void disableFade(void)
+{
+    TIMSK &= ~(1 << TOIE1);
+}
+
+ISR(TIMER1_OVF_vect)
+{
+    fadeTick = 1;
+}
+
+void breatheEffect(void)
+{
+    if (fadePhase & (BREATHE_INCREASE | BREATHE_DECREASE)) {
+        fadeValue += fadePhase;
+        setPWMDutyCycle(fadeValue);
+        /* Detect MAX and MIN */
+        if (fadeValue == BREATHE_MIN) {
+            fadePhase = BREATHE_PAUSE;
+            pauseValue = 0;
+        } else if (fadeValue == BREATHE_MAX) {
+            fadePhase = BREATHE_DECREASE;
+        }
+    } else {
+        pauseValue++;
+        if (pauseValue == BREATHE_PAUSE_DURATION)
+            fadePhase = BREATHE_INCREASE;
+    }
+}
+
+void flashEffect(void)
+{
+    fadeValue++;
+    if (fadeValue == FLASH_DURATION) {
+        fadeValue = 0;
+        toggleLED();
+    }
 }
 
 /* --------------------------------- Main ---------------------------------- */
@@ -93,53 +176,62 @@ int main(void)
 {
 uchar i;
 
-	TCCR0A = (1 << WGM01);             // CTC mode
-	TCCR0B = (1 << CS00 | 1 << CS02);  // clock/1024
-	OCR0A  = 0xFF;    		   // 15.8ms compare value ~63Hz
-	TIMSK |= (1 << OCIE0A);            // Enable interrupt
-        /* clock/256 + compare value 64 for 991Hz PWM signal */
+    DDRB |= (1 << PB1);     /* led output, active LOW */
+    PORTB |= (1 << PB1);
 
     usbInit();
     usbDeviceDisconnect();
-    for (i=0;i<20;i++) {  /* 300 ms disconnect */
+    for (i=0;i<20;i++) {    /* 300 ms disconnect */
         _delay_ms(15);
     }
     usbDeviceConnect();
     wdt_enable(WDTO_1S);
     sei();
-    DDRB |= (1 << PB1); /* led output, active LOW */
-    PORTB |= (1 << PB1);
     for(;;){
         wdt_reset();
         usbPoll();
         if (newStatus == 1) {
             newStatus = 0;
             switch (currentStatus) {
-                /* Just turn off the LED for now */
                 case CUSTOM_RX_STATUS_OFF:
+                    disablePWM();
+                    disableFade();
+                    turnOffLED();
+                    break;
                 case CUSTOM_RX_STATUS_AVAIL:
+                    enablePWM();
+                    enableFade();
+                    fadePhase = BREATHE_INCREASE;
+                    fadeValue = BREATHE_MIN;
+                    fadeFunction = &breatheEffect;
+                    break;
                 case CUSTOM_RX_STATUS_UNAVAIL:
+                    enablePWM();
+                    disableFade();
+                    setPWMDutyCycle(25);
+                    // breatheOff
+                    break;
                 case CUSTOM_RX_STATUS_MAXCHATS:
-                    PORTB |= (1 << PB1);
+                    enablePWM();
+                    disableFade();
+                    setPWMDutyCycle(125);
+                    // fast breathe
                     break;
                 case CUSTOM_RX_STATUS_UNREAD:
-                    PORTB &= ~(1 << PB1);
-                    timerFlag = 0;
+                    disablePWM();
+                    enableFade();
+                    fadePhase = BREATHE_INCREASE;
+                    fadeValue = BREATHE_MIN;
+                    fadeFunction = &flashEffect;
                     break;
                 default:
                     break;
             }
         }
-        switch (currentStatus) {
-            case CUSTOM_RX_STATUS_UNREAD:
-                if (timerFlag == 30) {
-                    // 255 = ~3 seconds? doesn't seem to match OCR0A...
-                    timerFlag = 0;
-                    PORTB ^= (1 << PB1);
-                }
-                break;
-            default:
-                break;
+
+        if (fadeTick == 1) {
+            fadeTick = 0;
+            fadeFunction();
         }
     }
     return 0;
