@@ -24,12 +24,12 @@ uint8_t fadeValue;
 uint8_t fadePhase;
 uint8_t pauseValue;
 
-#define BREATHE_INCREASE 2     //  0b10
-#define BREATHE_DECREASE -1    // -0b01
-#define BREATHE_PAUSE 0        //  0b00
-#define BREATHE_MIN 25
-#define BREATHE_MAX 145
-#define BREATHE_PAUSE_DURATION 140
+#define BREATHE_INCREASE 1
+#define BREATHE_DECREASE -1
+#define BREATHE_PAUSE 0
+#define BREATHE_MIN 45
+#define BREATHE_MAX 125
+#define BREATHE_PAUSE_DURATION 100
 
 #define FLASH_DURATION 40
 
@@ -95,6 +95,11 @@ uchar trialCal, bestCal, step, region;
 
 /* ---------------------------- LED functions ------------------------------ */
 
+void initLED(void)
+{
+    DDRB |= (1 << PB1);
+}
+
 void toggleLED(void)
 {
     PORTB ^= (1 << PB1);
@@ -102,15 +107,15 @@ void toggleLED(void)
 
 void turnOffLED(void)
 {
-    PORTB |= (1 << PB1);
+    PORTB |= (1 << PB1); // Active low
 }
 
 void enablePWM(void)
 {
     cli();
-    TCCR0A |= (1 << WGM01 | 1 << WGM00);  // Fast PWM mode
+    TCCR0A |= (1 << WGM01 | 1 << WGM00);   // Fast PWM mode
     TCCR0A |= (1 << COM0B1 | 1 << COM0B0); // Inverting mode
-    TCCR0B |= (1 << CS02 | 1 << CS00);   // clock/1024 ~60Hz
+    TCCR0B |= (1 << CS02 | 1 << CS00);     // clock/1024 ~60Hz
     OCR0B = 0;
     sei();
 }
@@ -128,7 +133,7 @@ void enableFade(void)
 {
     cli();
     TCCR1 |= (1 << CS13 | 1 << CS11 | 1 << CS10); // clock/1024 ~60Hz
-    TIMSK = (1 << TOIE1); // enable overflow interrupt
+    TIMSK = (1 << TOIE1); // Enable overflow interrupt
     sei();
 }
 
@@ -176,9 +181,8 @@ int main(void)
 {
 uchar i;
 
-    DDRB |= (1 << PB1);     /* led output, active LOW */
-    PORTB |= (1 << PB1);
-
+    initLED();
+    turnOffLED();
     usbInit();
     usbDeviceDisconnect();
     for (i=0;i<20;i++) {    /* 300 ms disconnect */
