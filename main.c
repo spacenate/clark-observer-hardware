@@ -50,7 +50,7 @@ uint8_t newStatus;
 usbMsgLen_t usbFunctionSetup(uchar data[8])
 {
 usbRequest_t *request = (void *)data;
-static uchar outputBuffer[2];
+static uchar outputBuffer[1];
 uint8_t msgLen = 0;
 
     switch (request->bRequest) {
@@ -62,8 +62,7 @@ uint8_t msgLen = 0;
             newStatus = 1;
             currentStatus = request->bRequest;
             outputBuffer[0] = CUSTOM_RX_CONFIRM;
-            outputBuffer[1] = currentStatus;
-            msgLen = 2;
+            msgLen = 1;
             break;
 
         default:
