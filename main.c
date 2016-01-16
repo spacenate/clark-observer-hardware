@@ -118,14 +118,17 @@ void turnOffLED(void)
     PORTB &= ~( _BV(RED_PIN) | _BV(BLUE_PIN) | _BV(GREEN_PIN) );
 }
 
+void initTimers(void)
+{
+    TCCR0B |= _BV(CS02) | _BV(CS00);     // clock/1024 ~60Hz
+    TCCR1 |= _BV(CS13) | _BV(CS11) | _BV(CS10); // clock/1024 ~60Hz
+}
+
 void enablePWM(void)
 {
     cli();
-    TCCR0A |= _BV(WGM01) | _BV(WGM00);   // Fast PWM mode
-    TCCR0A |= _BV(COM0A1) | _BV(COM0B1); // Clear on compare match
-    TCCR0B |= _BV(CS02) | _BV(CS00);     // clock/1024 ~60Hz
-    GTCCR |= _BV(PWM1B) | _BV(COM1B1);   // Clear on compare match, PB3 not connected
-    TCCR1 |= _BV(CS13) | _BV(CS11) | _BV(CS10); // clock/1024 ~60Hz
+    TCCR0A |= _BV(WGM01) | _BV(WGM00) | _BV(COM0A1) | _BV(COM0B1);   // Fast PWM mode, clear on compare match
+    GTCCR |= _BV(PWM1B) | _BV(COM1B1);   // PWM mode, clear on compare match with PB3 not connected
     setPWMDutyCycle(0, 0, 0);
     sei();
 }
@@ -139,12 +142,12 @@ void setPWMDutyCycle(uint8_t redCycle, uint8_t greenCycle, uint8_t blueCycle) {
 void disablePWM(void)
 {
     TCCR0A = 0;
+    GTCCR = 0;
 }
 
 void enableFade(void)
 {
     cli();
-    /* TCCR1 |= _BV(CS13) | _BV(CS11) | _BV(CS10); // clock/1024 ~60Hz */
     TIMSK = _BV(TOIE1); // Enable overflow interrupt
     sei();
 }
@@ -193,10 +196,9 @@ int main(void)
 {
 uchar i;
 
+    initTimers();
     initLED();
     turnOffLED();
-    enablePWM();
-    setPWMDutyCycle(0,255,0);
     usbInit();
     usbDeviceDisconnect();
     for (i=0;i<20;i++) {    /* 300 ms disconnect */
@@ -239,7 +241,6 @@ uchar i;
                     disablePWM();
                     enableFade();
                     turnOffLED();
-                    fadePhase = 1;
                     fadeValue = 0;
                     fadeFunction = &flashEffect;
                     break;
