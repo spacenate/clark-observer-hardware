@@ -22,10 +22,10 @@
    enablePWM must be updated as well */
 #define RED_PIN PB0
 #define GREEN_PIN PB1
-#define BLUE_PIN PB3
+#define BLUE_PIN PB4
 #define RED_OCP OCR0A
-#define BLUE_OCP OCR0B
-#define GREEN_OCP OCR1B
+#define GREEN_OCP OCR0B
+#define BLUE_OCP OCR1B
 
 volatile uint8_t fadeTick;
 void (* fadeFunction)(void);
@@ -122,18 +122,18 @@ void enablePWM(void)
 {
     cli();
     TCCR0A |= _BV(WGM01) | _BV(WGM00);   // Fast PWM mode
-    TCCR0A |= _BV(COM0A0) | _BV(COM0A1) | _BV(COM0B0) | _BV(COM0B1); // Set on compare match
+    TCCR0A |= _BV(COM0A1) | _BV(COM0B1); // Clear on compare match
     TCCR0B |= _BV(CS02) | _BV(CS00);     // clock/1024 ~60Hz
-    GTCCR |= _BV(PWM1B) | _BV(COM1B0);   // Set on compare match
+    GTCCR |= _BV(PWM1B) | _BV(COM1B1);   // Clear on compare match, PB3 not connected
     TCCR1 |= _BV(CS13) | _BV(CS11) | _BV(CS10); // clock/1024 ~60Hz
     setPWMDutyCycle(0, 0, 0);
     sei();
 }
 
-void setPWMDutyCycle(uint8_t redCycle, uint8_t blueCycle, uint8_t greenCycle) {
-    RED_OCP = 255 - redCycle;
-    BLUE_OCP = 255 - greenCycle;
-    GREEN_OCP = 255 - blueCycle;
+void setPWMDutyCycle(uint8_t redCycle, uint8_t greenCycle, uint8_t blueCycle) {
+    RED_OCP = redCycle;
+    GREEN_OCP = greenCycle;
+    BLUE_OCP = blueCycle;
 }
 
 void disablePWM(void)
@@ -144,7 +144,7 @@ void disablePWM(void)
 void enableFade(void)
 {
     cli();
-    TCCR1 |= _BV(CS13) | _BV(CS11) | _BV(CS10); // clock/1024 ~60Hz
+    /* TCCR1 |= _BV(CS13) | _BV(CS11) | _BV(CS10); // clock/1024 ~60Hz */
     TIMSK = _BV(TOIE1); // Enable overflow interrupt
     sei();
 }
@@ -163,7 +163,7 @@ void breatheEffect(void)
 {
     if (fadePhase & (BREATHE_INCREASE | BREATHE_DECREASE)) {
         fadeValue += fadePhase;
-        setPWMDutyCycle(fadeValue, fadeValue, fadeValue);
+        setPWMDutyCycle(0, 0, fadeValue);
         /* Detect MAX and MIN */
         if (fadeValue == BREATHE_MIN) {
             fadePhase = BREATHE_PAUSE;
@@ -195,10 +195,8 @@ uchar i;
 
     initLED();
     turnOffLED();
-
     enablePWM();
-    setPWMDutyCycle(0, 100, 255);
-
+    setPWMDutyCycle(0,255,0);
     usbInit();
     usbDeviceDisconnect();
     for (i=0;i<20;i++) {    /* 300 ms disconnect */
@@ -240,8 +238,9 @@ uchar i;
                 case CUSTOM_RX_STATUS_UNREAD:
                     disablePWM();
                     enableFade();
-                    fadePhase = BREATHE_INCREASE;
-                    fadeValue = BREATHE_MIN;
+                    turnOffLED();
+                    fadePhase = 1;
+                    fadeValue = 0;
                     fadeFunction = &flashEffect;
                     break;
                 default:
