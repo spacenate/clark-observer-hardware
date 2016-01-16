@@ -18,6 +18,16 @@
 #define CUSTOM_RX_STATUS_UNREAD 0x04
 #define CUSTOM_RX_CONFIRM 0x22
 
+/* These pins may be re-ordered, but if different pins are used,
+   enablePWM must be updated as well. Be sure to avoid conflict
+   with USB DATA- and DATA+ pins */
+#define RED_PIN PB0
+#define GREEN_PIN PB1
+#define BLUE_PIN PB4
+#define RED_OCP OCR0A
+#define GREEN_OCP OCR0B
+#define BLUE_OCP OCR1B
+
 volatile uint8_t fadeTick;
 void (* fadeFunction)(void);
 uint8_t fadeValue;
@@ -41,7 +51,7 @@ uint8_t newStatus;
 usbMsgLen_t usbFunctionSetup(uchar data[8])
 {
 usbRequest_t *request = (void *)data;
-static uchar outputBuffer[2];
+static uchar outputBuffer[1];
 uint8_t msgLen = 0;
 
     switch (request->bRequest) {
@@ -53,8 +63,7 @@ uint8_t msgLen = 0;
             newStatus = 1;
             currentStatus = request->bRequest;
             outputBuffer[0] = CUSTOM_RX_CONFIRM;
-            outputBuffer[1] = currentStatus;
-            msgLen = 2;
+            msgLen = 1;
             break;
 
         default:
@@ -97,49 +106,56 @@ uchar trialCal, bestCal, step, region;
 
 void initLED(void)
 {
-    DDRB |= (1 << PB1);
+    DDRB |= _BV(RED_PIN) | _BV(BLUE_PIN) | _BV(GREEN_PIN);
 }
 
 void toggleLED(void)
 {
-    PORTB ^= (1 << PB1);
+    PORTB ^= _BV(RED_PIN) | _BV(BLUE_PIN) | _BV(GREEN_PIN);
 }
 
 void turnOffLED(void)
 {
-    PORTB |= (1 << PB1); // Active low
+    PORTB &= ~( _BV(RED_PIN) | _BV(BLUE_PIN) | _BV(GREEN_PIN) );
+}
+
+void initTimers(void)
+{
+    TCCR0B |= _BV(CS02) | _BV(CS00);     // clock/1024 ~60Hz
+    TCCR1 |= _BV(CS13) | _BV(CS11) | _BV(CS10); // clock/1024 ~60Hz
 }
 
 void enablePWM(void)
 {
     cli();
-    TCCR0A |= (1 << WGM01 | 1 << WGM00);   // Fast PWM mode
-    TCCR0A |= (1 << COM0B1 | 1 << COM0B0); // Inverting mode
-    TCCR0B |= (1 << CS02 | 1 << CS00);     // clock/1024 ~60Hz
-    OCR0B = 0;
+    TCCR0A |= _BV(WGM01) | _BV(WGM00) | _BV(COM0A1) | _BV(COM0B1);   // Fast PWM mode, clear on compare match
+    GTCCR |= _BV(PWM1B) | _BV(COM1B1);   // PWM mode, clear on compare match with PB3 not connected
+    setPWMDutyCycle(0, 0, 0);
     sei();
 }
 
-void setPWMDutyCycle(uint8_t dutyCycle) {
-    OCR0B = dutyCycle;
+void setPWMDutyCycle(uint8_t redCycle, uint8_t greenCycle, uint8_t blueCycle) {
+    RED_OCP = redCycle;
+    GREEN_OCP = greenCycle;
+    BLUE_OCP = blueCycle;
 }
 
 void disablePWM(void)
 {
     TCCR0A = 0;
+    GTCCR = 0;
 }
 
 void enableFade(void)
 {
     cli();
-    TCCR1 |= (1 << CS13 | 1 << CS11 | 1 << CS10); // clock/1024 ~60Hz
-    TIMSK = (1 << TOIE1); // Enable overflow interrupt
+    TIMSK = _BV(TOIE1); // Enable overflow interrupt
     sei();
 }
 
 void disableFade(void)
 {
-    TIMSK &= ~(1 << TOIE1);
+    TIMSK &= ~_BV(TOIE1);
 }
 
 ISR(TIMER1_OVF_vect)
@@ -151,7 +167,7 @@ void breatheEffect(void)
 {
     if (fadePhase & (BREATHE_INCREASE | BREATHE_DECREASE)) {
         fadeValue += fadePhase;
-        setPWMDutyCycle(fadeValue);
+        setPWMDutyCycle(0, 0, fadeValue);
         /* Detect MAX and MIN */
         if (fadeValue == BREATHE_MIN) {
             fadePhase = BREATHE_PAUSE;
@@ -181,6 +197,7 @@ int main(void)
 {
 uchar i;
 
+    initTimers();
     initLED();
     turnOffLED();
     usbInit();
@@ -212,20 +229,20 @@ uchar i;
                 case CUSTOM_RX_STATUS_UNAVAIL:
                     enablePWM();
                     disableFade();
-                    setPWMDutyCycle(25);
+                    setPWMDutyCycle(25, 25, 25);
                     // breatheOff
                     break;
                 case CUSTOM_RX_STATUS_MAXCHATS:
                     enablePWM();
                     disableFade();
-                    setPWMDutyCycle(125);
+                    setPWMDutyCycle(125, 125, 125);
                     // fast breathe
                     break;
                 case CUSTOM_RX_STATUS_UNREAD:
                     disablePWM();
                     enableFade();
-                    fadePhase = BREATHE_INCREASE;
-                    fadeValue = BREATHE_MIN;
+                    turnOffLED();
+                    fadeValue = 0;
                     fadeFunction = &flashEffect;
                     break;
                 default:
