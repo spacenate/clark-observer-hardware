@@ -18,6 +18,8 @@
 #define CUSTOM_RX_STATUS_UNREAD 0x04
 #define CUSTOM_RX_CONFIRM 0x22
 
+/* These pins may be re-ordered, but if different pins are used,
+   enablePWM must be updated as well */
 #define RED_PIN PB0
 #define GREEN_PIN PB1
 #define BLUE_PIN PB3
@@ -123,11 +125,9 @@ void enablePWM(void)
     TCCR0A |= _BV(WGM01) | _BV(WGM00);   // Fast PWM mode
     TCCR0A |= _BV(COM0A0) | _BV(COM0A1) | _BV(COM0B0) | _BV(COM0B1); // Set on compare match
     TCCR0B |= _BV(CS02) | _BV(CS00);     // clock/1024 ~60Hz
-    OCR0A = 255;
-    OCR0B = 255;
-    GTCCR |= _BV(PWM1B) | _BV(COM1B0); // Set on compare match
+    GTCCR |= _BV(PWM1B) | _BV(COM1B0);   // Set on compare match
     TCCR1 |= _BV(CS13) | _BV(CS11) | _BV(CS10); // clock/1024 ~60Hz
-    OCR1B = 255;
+    setPWMDutyCycle(0, 0, 0);
     sei();
 }
 
