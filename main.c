@@ -19,7 +19,8 @@
 #define CUSTOM_RX_CONFIRM 0x22
 
 /* These pins may be re-ordered, but if different pins are used,
-   enablePWM must be updated as well */
+   enablePWM must be updated as well. Be sure to avoid conflict
+   with USB DATA- and DATA+ pins */
 #define RED_PIN PB0
 #define GREEN_PIN PB1
 #define BLUE_PIN PB4
