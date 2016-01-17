@@ -28,18 +28,19 @@
 #define GREEN_OCP OCR0B
 #define BLUE_OCP OCR1B
 
-volatile uint8_t fadeTick;
 void (* fadeFunction)(void);
-uint8_t fadeValue;
+volatile uint8_t fadeTick;
 uint8_t fadePhase;
+uint8_t fadeValue;
 uint8_t pauseValue;
+uint8_t ledMask[3];
 
-#define BREATHE_INCREASE 1
-#define BREATHE_DECREASE -1
-#define BREATHE_PAUSE 0
-#define BREATHE_MIN 45
-#define BREATHE_MAX 125
-#define BREATHE_PAUSE_DURATION 100
+#define PULSE_MIN_BRIGHTNESS 40
+#define PULSE_MAX_BRIGHTNESS 240
+#define PULSE_PAUSE_DURATION 60
+#define PULSE_INCREASE 2
+#define PULSE_DECREASE -2
+#define PULSE_PAUSE 0
 
 #define FLASH_DURATION 40
 
@@ -163,22 +164,25 @@ ISR(TIMER1_OVF_vect)
     fadeTick = 1;
 }
 
-void breatheEffect(void)
+void pulseEffect(void)
 {
-    if (fadePhase & (BREATHE_INCREASE | BREATHE_DECREASE)) {
+    if (fadePhase & (PULSE_INCREASE | PULSE_DECREASE)) {
         fadeValue += fadePhase;
-        setPWMDutyCycle(0, 0, fadeValue);
+        uint8_t redCycle = ((uint16_t)fadeValue * ledMask[0]) >> 8;
+        uint8_t greenCycle = ((uint16_t)fadeValue * ledMask[1]) >> 8;
+        uint8_t blueCycle = ((uint16_t)fadeValue * ledMask[2]) >> 8;
+        setPWMDutyCycle(redCycle, greenCycle, blueCycle);
         /* Detect MAX and MIN */
-        if (fadeValue == BREATHE_MIN) {
-            fadePhase = BREATHE_PAUSE;
+        if (fadeValue == PULSE_MIN_BRIGHTNESS) {
+            fadePhase = PULSE_PAUSE;
             pauseValue = 0;
-        } else if (fadeValue == BREATHE_MAX) {
-            fadePhase = BREATHE_DECREASE;
+        } else if (fadeValue == PULSE_MAX_BRIGHTNESS) {
+            fadePhase = PULSE_DECREASE;
         }
     } else {
         pauseValue++;
-        if (pauseValue == BREATHE_PAUSE_DURATION)
-            fadePhase = BREATHE_INCREASE;
+        if (pauseValue == PULSE_PAUSE_DURATION)
+            fadePhase = PULSE_INCREASE;
     }
 }
 
@@ -222,21 +226,34 @@ uchar i;
                 case CUSTOM_RX_STATUS_AVAIL:
                     enablePWM();
                     enableFade();
-                    fadePhase = BREATHE_INCREASE;
-                    fadeValue = BREATHE_MIN;
-                    fadeFunction = &breatheEffect;
+                    fadePhase = PULSE_INCREASE;
+                    fadeValue = PULSE_MIN_BRIGHTNESS;
+                    ledMask[0] = 255;
+                    ledMask[1] = 102;
+                    ledMask[2] = 0;
+                    fadeFunction = &pulseEffect;
                     break;
                 case CUSTOM_RX_STATUS_UNAVAIL:
                     enablePWM();
-                    disableFade();
-                    setPWMDutyCycle(25, 25, 25);
-                    // breatheOff
+                    enableFade();
+                    fadePhase = PULSE_INCREASE;
+                    fadeValue = PULSE_MIN_BRIGHTNESS;
+                    ledMask[0] = 0;
+                    ledMask[1] = 102;
+                    ledMask[2] = 204;
+                    fadeFunction = &pulseEffect;
+                    // pulseOff
                     break;
                 case CUSTOM_RX_STATUS_MAXCHATS:
                     enablePWM();
-                    disableFade();
-                    setPWMDutyCycle(125, 125, 125);
-                    // fast breathe
+                    enableFade();
+                    fadePhase = PULSE_INCREASE;
+                    fadeValue = PULSE_MIN_BRIGHTNESS;
+                    ledMask[0] = 251;
+                    ledMask[1] = 51;
+                    ledMask[2] = 153;
+                    fadeFunction = &pulseEffect;
+                    // fast pulse
                     break;
                 case CUSTOM_RX_STATUS_UNREAD:
                     disablePWM();
