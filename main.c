@@ -32,7 +32,7 @@
 void (* fadeFunction)(void);
 volatile uint8_t fadeTick;
 uint8_t fadePhase;
-uint16_t fadeValue;
+uint8_t fadeValue;
 uint8_t pauseValue;
 uint8_t ledMask[3];
 
@@ -209,15 +209,19 @@ void flashEffect(void)
 void idleTimer(void)
 {
     fadeValue++;
-    if (fadeValue == 3000) {
-        newStatus = 1;
-        currentStatus = CUSTOM_RX_RAINBOW;
+    if (fadeValue == 256) {
+        fadeValue = 0;
+        fadePhase++;
+        if (fadePhase == 11) {
+            newStatus = 1;
+            currentStatus = CUSTOM_RX_RAINBOW;
+        }
     }
 }
 
 void rainbowEffect(void)
 {
-    if (fadeValue < 2) {
+    if (fadeValue < 3) {
         fadeValue++;
         return;
     }
@@ -232,10 +236,10 @@ void rainbowEffect(void)
             if (GREEN_OCP == 0x80) // ff8000
                 fadePhase++;
             else
-                setPWMDutyCycle(256, GREEN_OCP+1, 0);
+                setPWMDutyCycle(255, GREEN_OCP+1, 0);
             break;
         case 2:
-            if (GREEN_OCP == 0xFF) // c0ff00
+            if (GREEN_OCP == 0xFE) // c0ff00
                 fadePhase++;
             else
                 setPWMDutyCycle(RED_OCP-1, GREEN_OCP+2, 0);
@@ -244,43 +248,43 @@ void rainbowEffect(void)
             if (RED_OCP == 0x80) // 80ff00
                 fadePhase++;
             else
-                setPWMDutyCycle(RED_OCP-1, 256, 0);
+                setPWMDutyCycle(RED_OCP-1, 255, 0);
             break;
         case 4:
-            if (RED_OCP == 0x00) // 00FF80
+            if (RED_OCP == 0x00) // 00FF40
                 fadePhase++;
             else
-                setPWMDutyCycle(RED_OCP-2, 256, BLUE_OCP+2);
+                setPWMDutyCycle(RED_OCP-2, 255, BLUE_OCP+1);
             break;
         case 5:
-            if (BLUE_OCP == 0xFF) // 00FFFF
+            if (BLUE_OCP == 0xFD) // 00FFFF
                 fadePhase++;
             else
-                setPWMDutyCycle(0, 256, BLUE_OCP+2);
+                setPWMDutyCycle(0, 255, BLUE_OCP+3);
             break;
         case 6:
-            if (GREEN_OCP == 0x01) // 0000FF
+            if (GREEN_OCP == 0x00) // 0000FF
                 fadePhase++;
             else
-                setPWMDutyCycle(0, GREEN_OCP-3, 256);
+                setPWMDutyCycle(0, GREEN_OCP-3, 255);
             break;
         case 7:
-            if (RED_OCP == 0x80) // 8000FF
+            if (RED_OCP == 0xFE) // FF00FF
                 fadePhase++;
             else
-                setPWMDutyCycle(RED_OCP+2, 0, 256);
+                setPWMDutyCycle(RED_OCP+2, 0, 255);
             break;
         case 8:
-            if (RED_OCP == 0xFF) // FF00FF
+            if (BLUE_OCP == 0x3C) // 00003C
                 fadePhase++;
             else
-                setPWMDutyCycle(RED_OCP+2, 0, 256);
+                setPWMDutyCycle(255, 0, BLUE_OCP-3);
             break;
         case 9:
-            if (BLUE_OCP == 0x01) // 000000
+            if (BLUE_OCP == 0x00) // 000000
                 fadePhase = 1;
             else
-                setPWMDutyCycle(0, 0, BLUE_OCP-3);
+                setPWMDutyCycle(255, 0, BLUE_OCP-2);
             break;
         default:
             fadePhase = 0;
@@ -307,6 +311,7 @@ uchar i;
     sei();
     enableFade();
     fadeValue = 0;
+    fadePhase = 0;
     fadeFunction = &idleTimer;
     for(;;){
         wdt_reset();
@@ -319,6 +324,7 @@ uchar i;
                     turnOffLED();
                     enableFade();
                     fadeValue = 0;
+                    fadePhase = 0;
                     fadeFunction = &idleTimer;
                     break;
                 case CUSTOM_RX_STATUS_AVAIL:
