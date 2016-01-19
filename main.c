@@ -16,33 +16,34 @@
 #define CUSTOM_RX_STATUS_UNAVAIL 0x02
 #define CUSTOM_RX_STATUS_MAXCHATS 0x03
 #define CUSTOM_RX_STATUS_UNREAD 0x04
+#define CUSTOM_RX_RAINBOW 0x45
 #define CUSTOM_RX_CONFIRM 0x22
 
 /* These pins may be re-ordered, but if different pins are used,
    enablePWM must be updated as well. Be sure to avoid conflict
    with USB DATA- and DATA+ pins */
-#define RED_PIN PB0
-#define GREEN_PIN PB1
-#define BLUE_PIN PB4
-#define RED_OCP OCR0A
-#define GREEN_OCP OCR0B
-#define BLUE_OCP OCR1B
+#define RED_PIN PB4
+#define GREEN_PIN PB0
+#define BLUE_PIN PB1
+#define RED_OCP OCR1B
+#define GREEN_OCP OCR0A
+#define BLUE_OCP OCR0B
 
 void (* fadeFunction)(void);
 volatile uint8_t fadeTick;
 uint8_t fadePhase;
-uint8_t fadeValue;
+uint16_t fadeValue;
 uint8_t pauseValue;
 uint8_t ledMask[3];
 
-#define PULSE_MIN_BRIGHTNESS 40
-#define PULSE_MAX_BRIGHTNESS 240
+#define PULSE_MIN_BRIGHTNESS 140
+#define PULSE_MAX_BRIGHTNESS 255
 #define PULSE_PAUSE_DURATION 60
-#define PULSE_INCREASE 2
-#define PULSE_DECREASE -2
+#define PULSE_INCREASE 1
+#define PULSE_DECREASE -1
 #define PULSE_PAUSE 0
 
-#define FLASH_DURATION 40
+#define FLASH_DURATION 30
 
 uint8_t currentStatus;
 uint8_t newStatus;
@@ -61,6 +62,7 @@ uint8_t msgLen = 0;
         case CUSTOM_RX_STATUS_UNAVAIL:
         case CUSTOM_RX_STATUS_MAXCHATS:
         case CUSTOM_RX_STATUS_UNREAD:
+        case CUSTOM_RX_RAINBOW:
             newStatus = 1;
             currentStatus = request->bRequest;
             outputBuffer[0] = CUSTOM_RX_CONFIRM;
@@ -190,8 +192,74 @@ void flashEffect(void)
 {
     fadeValue++;
     if (fadeValue == FLASH_DURATION) {
+        uint8_t redCycle = ((uint16_t)255 * ledMask[0]) >> 8;
+        uint8_t greenCycle = ((uint16_t)255 * ledMask[1]) >> 8;
+        uint8_t blueCycle = ((uint16_t)255 * ledMask[2]) >> 8;
+        enablePWM();
+        setPWMDutyCycle(redCycle, greenCycle, blueCycle);
+    } else if (fadeValue == (FLASH_DURATION * 2)) {
+        disablePWM();
+        turnOffLED();
         fadeValue = 0;
-        toggleLED();
+    }
+}
+
+void idleTimer(void)
+{
+    fadeValue++;
+    if (fadeValue == 3000) {
+        newStatus = 1;
+        currentStatus = CUSTOM_RX_RAINBOW;
+    }
+}
+
+void rainbowEffect(void)
+{
+    switch (fadePhase) {
+        case 0:
+            if (RED_OCP == 0xEF)
+                fadePhase++;
+            else
+                setPWMDutyCycle(RED_OCP+1, GREEN_OCP, BLUE_OCP);
+        case 1:
+            if (GREEN_OCP == 0xEF) // Increase green until max
+                fadePhase++;
+            else
+                setPWMDutyCycle(RED_OCP, GREEN_OCP+1, BLUE_OCP);
+            break;
+        case 2:
+            if (RED_OCP == 0x00) // Decrease red until min
+                fadePhase++;
+            else
+                setPWMDutyCycle(RED_OCP-1, GREEN_OCP, BLUE_OCP);
+            break;
+        case 3:
+            if (BLUE_OCP == 0xEF) // Increase blue until max
+                fadePhase++;
+            else
+                setPWMDutyCycle(RED_OCP, GREEN_OCP, BLUE_OCP+1);
+            break;
+        case 4:
+            if (GREEN_OCP == 0x00) // Decrease green until min
+                fadePhase++;
+            else
+                setPWMDutyCycle(RED_OCP, GREEN_OCP-1, BLUE_OCP);
+            break;
+        case 5:
+            if (RED_OCP == 0xEF) // Increase red until max
+                fadePhase++;
+            else
+                setPWMDutyCycle(RED_OCP+1, GREEN_OCP, BLUE_OCP);
+            break;
+        case 6:
+            if (BLUE_OCP == 0x00) // Decrease blue until min
+                fadePhase = 1;
+            else
+                setPWMDutyCycle(RED_OCP, GREEN_OCP, BLUE_OCP-1);
+            break;
+        default:
+            fadePhase = 0;
+            break;
     }
 }
 
@@ -204,6 +272,9 @@ uchar i;
     initTimers();
     initLED();
     turnOffLED();
+    enableFade();
+    fadeValue = 0;
+    fadeFunction = &idleTimer;
     usbInit();
     usbDeviceDisconnect();
     for (i=0;i<20;i++) {    /* 300 ms disconnect */
@@ -220,17 +291,19 @@ uchar i;
             switch (currentStatus) {
                 case CUSTOM_RX_STATUS_OFF:
                     disablePWM();
-                    disableFade();
                     turnOffLED();
+                    enableFade();
+                    fadeValue = 0;
+                    fadeFunction = &idleTimer;
                     break;
                 case CUSTOM_RX_STATUS_AVAIL:
                     enablePWM();
                     enableFade();
                     fadePhase = PULSE_INCREASE;
                     fadeValue = PULSE_MIN_BRIGHTNESS;
-                    ledMask[0] = 255;
-                    ledMask[1] = 102;
-                    ledMask[2] = 0;
+                    ledMask[0] = 30;
+                    ledMask[1] = 255;
+                    ledMask[2] = 10;
                     fadeFunction = &pulseEffect;
                     break;
                 case CUSTOM_RX_STATUS_UNAVAIL:
@@ -238,9 +311,9 @@ uchar i;
                     enableFade();
                     fadePhase = PULSE_INCREASE;
                     fadeValue = PULSE_MIN_BRIGHTNESS;
-                    ledMask[0] = 0;
-                    ledMask[1] = 102;
-                    ledMask[2] = 204;
+                    ledMask[0] = 255;
+                    ledMask[1] = 20;
+                    ledMask[2] = 10;
                     fadeFunction = &pulseEffect;
                     // pulseOff
                     break;
@@ -249,19 +322,27 @@ uchar i;
                     enableFade();
                     fadePhase = PULSE_INCREASE;
                     fadeValue = PULSE_MIN_BRIGHTNESS;
-                    ledMask[0] = 251;
-                    ledMask[1] = 51;
-                    ledMask[2] = 153;
+                    ledMask[0] = 170;
+                    ledMask[1] = 170;
+                    ledMask[2] = 170;
                     fadeFunction = &pulseEffect;
                     // fast pulse
                     break;
                 case CUSTOM_RX_STATUS_UNREAD:
                     disablePWM();
-                    enableFade();
                     turnOffLED();
-                    fadeValue = 0;
+                    enableFade();
+                    fadeValue = FLASH_DURATION - 1; /* LED will turn on next time flashEffect is called */
+                    ledMask[0] = 255;
+                    ledMask[1] = 0;
+                    ledMask[2] = 0;
                     fadeFunction = &flashEffect;
                     break;
+                case CUSTOM_RX_RAINBOW:
+                    enablePWM();
+                    enableFade();
+                    fadePhase = 0;
+                    fadeFunction = &rainbowEffect;
                 default:
                     break;
             }
