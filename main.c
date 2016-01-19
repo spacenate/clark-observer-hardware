@@ -45,6 +45,8 @@ uint8_t ledMask[3];
 
 #define FLASH_DURATION 30
 
+#define RAINBOW_TRANSITION_DURATION 200
+
 uint8_t currentStatus;
 uint8_t newStatus;
 
@@ -215,47 +217,70 @@ void idleTimer(void)
 
 void rainbowEffect(void)
 {
+    if (fadeValue < 2) {
+        fadeValue++;
+        return;
+    }
+    fadeValue = 0;
     switch (fadePhase) {
         case 0:
-            if (RED_OCP == 0xEF)
+            if (RED_OCP == 0xFF) // ff0000
                 fadePhase++;
             else
-                setPWMDutyCycle(RED_OCP+1, GREEN_OCP, BLUE_OCP);
+                setPWMDutyCycle(RED_OCP+1, 0, 0);
         case 1:
-            if (GREEN_OCP == 0xEF) // Increase green until max
+            if (GREEN_OCP == 0x80) // ff8000
                 fadePhase++;
             else
-                setPWMDutyCycle(RED_OCP, GREEN_OCP+1, BLUE_OCP);
+                setPWMDutyCycle(256, GREEN_OCP+1, 0);
             break;
         case 2:
-            if (RED_OCP == 0x00) // Decrease red until min
+            if (GREEN_OCP == 0xFF) // c0ff00
                 fadePhase++;
             else
-                setPWMDutyCycle(RED_OCP-1, GREEN_OCP, BLUE_OCP);
+                setPWMDutyCycle(RED_OCP-1, GREEN_OCP+2, 0);
             break;
         case 3:
-            if (BLUE_OCP == 0xEF) // Increase blue until max
+            if (RED_OCP == 0x80) // 80ff00
                 fadePhase++;
             else
-                setPWMDutyCycle(RED_OCP, GREEN_OCP, BLUE_OCP+1);
+                setPWMDutyCycle(RED_OCP-1, 256, 0);
             break;
         case 4:
-            if (GREEN_OCP == 0x00) // Decrease green until min
+            if (RED_OCP == 0x00) // 00FF80
                 fadePhase++;
             else
-                setPWMDutyCycle(RED_OCP, GREEN_OCP-1, BLUE_OCP);
+                setPWMDutyCycle(RED_OCP-2, 256, BLUE_OCP+2);
             break;
         case 5:
-            if (RED_OCP == 0xEF) // Increase red until max
+            if (BLUE_OCP == 0xFF) // 00FFFF
                 fadePhase++;
             else
-                setPWMDutyCycle(RED_OCP+1, GREEN_OCP, BLUE_OCP);
+                setPWMDutyCycle(0, 256, BLUE_OCP+2);
             break;
         case 6:
-            if (BLUE_OCP == 0x00) // Decrease blue until min
+            if (GREEN_OCP == 0x01) // 0000FF
+                fadePhase++;
+            else
+                setPWMDutyCycle(0, GREEN_OCP-3, 256);
+            break;
+        case 7:
+            if (RED_OCP == 0x80) // 8000FF
+                fadePhase++;
+            else
+                setPWMDutyCycle(RED_OCP+2, 0, 256);
+            break;
+        case 8:
+            if (RED_OCP == 0xFF) // FF00FF
+                fadePhase++;
+            else
+                setPWMDutyCycle(RED_OCP+2, 0, 256);
+            break;
+        case 9:
+            if (BLUE_OCP == 0x01) // 000000
                 fadePhase = 1;
             else
-                setPWMDutyCycle(RED_OCP, GREEN_OCP, BLUE_OCP-1);
+                setPWMDutyCycle(0, 0, BLUE_OCP-3);
             break;
         default:
             fadePhase = 0;
@@ -272,9 +297,6 @@ uchar i;
     initTimers();
     initLED();
     turnOffLED();
-    enableFade();
-    fadeValue = 0;
-    fadeFunction = &idleTimer;
     usbInit();
     usbDeviceDisconnect();
     for (i=0;i<20;i++) {    /* 300 ms disconnect */
@@ -283,6 +305,9 @@ uchar i;
     usbDeviceConnect();
     wdt_enable(WDTO_1S);
     sei();
+    enableFade();
+    fadeValue = 0;
+    fadeFunction = &idleTimer;
     for(;;){
         wdt_reset();
         usbPoll();
@@ -342,6 +367,7 @@ uchar i;
                     enablePWM();
                     enableFade();
                     fadePhase = 0;
+                    fadeValue = 0;
                     fadeFunction = &rainbowEffect;
                 default:
                     break;
