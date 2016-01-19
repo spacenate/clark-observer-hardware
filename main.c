@@ -32,7 +32,7 @@
 void (* fadeFunction)(void);
 volatile uint8_t fadeTick;
 uint8_t fadePhase;
-uint16_t fadeValue;
+uint8_t fadeValue;
 uint8_t pauseValue;
 uint8_t ledMask[3];
 
