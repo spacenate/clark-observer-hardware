@@ -228,10 +228,10 @@ void rainbowEffect(void)
     fadeValue = 0;
     switch (fadePhase) {
         case 0:
-            if (RED_OCP == 0xFF) // ff0000
+            if (RED_OCP == 0xFE) // ff0000
                 fadePhase++;
             else
-                setPWMDutyCycle(RED_OCP+1, 0, 0);
+                setPWMDutyCycle(RED_OCP+2, 0, 0);
             break;
         case 1:
             if (GREEN_OCP == 0x80) // ff8000
