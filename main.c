@@ -212,7 +212,7 @@ void idleTimer(void)
     if (fadeValue == 255) {
         fadeValue = 0;
         fadePhase++;
-        if (fadePhase == 11) {
+        if (fadePhase == 1) { // 11
             newStatus = 1;
             currentStatus = CUSTOM_RX_RAINBOW;
         }
@@ -232,6 +232,7 @@ void rainbowEffect(void)
                 fadePhase++;
             else
                 setPWMDutyCycle(RED_OCP+1, 0, 0);
+            break;
         case 1:
             if (GREEN_OCP == 0x80) // ff8000
                 fadePhase++;
