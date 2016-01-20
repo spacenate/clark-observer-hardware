@@ -209,7 +209,7 @@ void flashEffect(void)
 void idleTimer(void)
 {
     fadeValue++;
-    if (fadeValue == 256) {
+    if (fadeValue == 255) {
         fadeValue = 0;
         fadePhase++;
         if (fadePhase == 11) {
@@ -275,7 +275,7 @@ void rainbowEffect(void)
                 setPWMDutyCycle(RED_OCP+2, 0, 255);
             break;
         case 8:
-            if (BLUE_OCP == 0x3C) // 00003C
+            if (BLUE_OCP == 0x2D) // 00002D
                 fadePhase++;
             else
                 setPWMDutyCycle(255, 0, BLUE_OCP-3);
@@ -284,7 +284,7 @@ void rainbowEffect(void)
             if (BLUE_OCP == 0x00) // 000000
                 fadePhase = 1;
             else
-                setPWMDutyCycle(255, 0, BLUE_OCP-2);
+                setPWMDutyCycle(255, 0, BLUE_OCP-1);
             break;
         default:
             fadePhase = 0;
