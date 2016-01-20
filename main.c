@@ -11,13 +11,13 @@
 #include <util/delay.h>
 #include "usbdrv.h"
 
-#define CUSTOM_RX_STATUS_OFF 0x00
-#define CUSTOM_RX_STATUS_AVAIL 0x01
-#define CUSTOM_RX_STATUS_UNAVAIL 0x02
-#define CUSTOM_RX_STATUS_MAXCHATS 0x03
-#define CUSTOM_RX_STATUS_UNREAD 0x04
-#define CUSTOM_RX_RAINBOW 0x45
-#define CUSTOM_RX_CONFIRM 0x22
+#define CUSTOM_RQ_STATUS_OFF 0x00
+#define CUSTOM_RQ_STATUS_AVAIL 0x01
+#define CUSTOM_RQ_STATUS_AWAY 0x02
+#define CUSTOM_RQ_STATUS_MAXCHATS 0x03
+#define CUSTOM_RQ_STATUS_UNREAD 0x04
+#define CUSTOM_RQ_RAINBOW 0x45
+#define CUSTOM_RQ_CONFIRM 0x22
 
 /* These pins may be re-ordered, but if different pins are used,
    enablePWM must be updated as well. Be sure to avoid conflict
@@ -59,15 +59,15 @@ static uchar outputBuffer[1];
 uint8_t msgLen = 0;
 
     switch (request->bRequest) {
-        case CUSTOM_RX_STATUS_OFF:
-        case CUSTOM_RX_STATUS_AVAIL:
-        case CUSTOM_RX_STATUS_UNAVAIL:
-        case CUSTOM_RX_STATUS_MAXCHATS:
-        case CUSTOM_RX_STATUS_UNREAD:
-        case CUSTOM_RX_RAINBOW:
+        case CUSTOM_RQ_STATUS_OFF:
+        case CUSTOM_RQ_STATUS_AVAIL:
+        case CUSTOM_RQ_STATUS_AWAY:
+        case CUSTOM_RQ_STATUS_MAXCHATS:
+        case CUSTOM_RQ_STATUS_UNREAD:
+        case CUSTOM_RQ_RAINBOW:
             newStatus = 1;
             currentStatus = request->bRequest;
-            outputBuffer[0] = CUSTOM_RX_CONFIRM;
+            outputBuffer[0] = CUSTOM_RQ_CONFIRM;
             msgLen = 1;
             break;
 
@@ -214,7 +214,7 @@ void idleTimer(void)
         fadePhase++;
         if (fadePhase == 1) { // 11
             newStatus = 1;
-            currentStatus = CUSTOM_RX_RAINBOW;
+            currentStatus = CUSTOM_RQ_RAINBOW;
         }
     }
 }
@@ -320,7 +320,7 @@ uchar i;
         if (newStatus == 1) {
             newStatus = 0;
             switch (currentStatus) {
-                case CUSTOM_RX_STATUS_OFF:
+                case CUSTOM_RQ_STATUS_OFF:
                     disablePWM();
                     turnOffLED();
                     enableFade();
@@ -328,7 +328,7 @@ uchar i;
                     fadePhase = 0;
                     fadeFunction = &idleTimer;
                     break;
-                case CUSTOM_RX_STATUS_AVAIL:
+                case CUSTOM_RQ_STATUS_AVAIL:
                     enablePWM();
                     enableFade();
                     fadePhase = PULSE_INCREASE;
@@ -338,7 +338,7 @@ uchar i;
                     ledMask[2] = 10;
                     fadeFunction = &pulseEffect;
                     break;
-                case CUSTOM_RX_STATUS_UNAVAIL:
+                case CUSTOM_RQ_STATUS_AWAY:
                     enablePWM();
                     enableFade();
                     fadePhase = PULSE_INCREASE;
@@ -349,7 +349,7 @@ uchar i;
                     fadeFunction = &pulseEffect;
                     // pulseOff
                     break;
-                case CUSTOM_RX_STATUS_MAXCHATS:
+                case CUSTOM_RQ_STATUS_MAXCHATS:
                     enablePWM();
                     enableFade();
                     fadePhase = PULSE_INCREASE;
@@ -360,7 +360,7 @@ uchar i;
                     fadeFunction = &pulseEffect;
                     // fast pulse
                     break;
-                case CUSTOM_RX_STATUS_UNREAD:
+                case CUSTOM_RQ_STATUS_UNREAD:
                     disablePWM();
                     turnOffLED();
                     enableFade();
@@ -370,7 +370,7 @@ uchar i;
                     ledMask[2] = 0;
                     fadeFunction = &flashEffect;
                     break;
-                case CUSTOM_RX_RAINBOW:
+                case CUSTOM_RQ_RAINBOW:
                     enablePWM();
                     enableFade();
                     fadePhase = 0;
