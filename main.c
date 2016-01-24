@@ -308,12 +308,6 @@ void rainbowEffect(void)
     }
 }
 
-/* @todo: moodLightEffect
-1) random color generator fn
-2) euclidean distance fn
-3) linear interpolation fn -- possible with only fixed point math?
-*/
-
 uint8_t randomColor(void)
 {
     return (uint8_t)(rand() >> 8);
