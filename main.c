@@ -353,7 +353,7 @@ uint8_t interpolate(uint8_t start, uint8_t end, uint8_t distance, uint8_t step)
 void moodLightEffect(void)
 {
 static uint8_t i = 0;
-    if (i < 3) {
+    if (i < 4) {
         i++;
         return;
     }
