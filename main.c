@@ -5,6 +5,7 @@
  * Copyright: (c) 2016 Nathan Sollenberger
  * License: GPL
  */
+#include <stdlib.h>
 #include <avr/io.h>
 #include <avr/wdt.h>
 #include <avr/interrupt.h>
@@ -34,7 +35,8 @@ volatile uint8_t fadeTick;
 uint8_t fadePhase;
 uint8_t fadeValue;
 uint8_t pauseValue;
-uint8_t ledMask[3];
+uint8_t colorMask[3];
+uint8_t nextColor[3];
 
 #define PULSE_MIN_BRIGHTNESS 140
 #define PULSE_MAX_BRIGHTNESS 255
@@ -68,6 +70,19 @@ uint8_t msgLen = 0;
             newStatus = 1;
             currentStatus = request->bRequest;
             outputBuffer[0] = CUSTOM_RQ_CONFIRM;
+            msgLen = 1;
+            break;
+
+        case 40:
+            outputBuffer[0] = fadePhase;
+            msgLen = 1;
+            break;
+        case 41:
+            outputBuffer[0] = fadeValue;
+            msgLen = 1;
+            break;
+        case 50:
+            outputBuffer[0] = RED_OCP;
             msgLen = 1;
             break;
 
@@ -130,6 +145,12 @@ void initTimers(void)
     TCCR1 |= _BV(CS13) | _BV(CS11) | _BV(CS10); // clock/1024 ~60Hz
 }
 
+void setPWMDutyCycle(uint8_t redCycle, uint8_t greenCycle, uint8_t blueCycle) {
+    RED_OCP = redCycle;
+    GREEN_OCP = greenCycle;
+    BLUE_OCP = blueCycle;
+}
+
 void enablePWM(void)
 {
     cli();
@@ -137,12 +158,6 @@ void enablePWM(void)
     GTCCR |= _BV(PWM1B) | _BV(COM1B1);   // PWM mode, clear on compare match with PB3 not connected
     setPWMDutyCycle(0, 0, 0);
     sei();
-}
-
-void setPWMDutyCycle(uint8_t redCycle, uint8_t greenCycle, uint8_t blueCycle) {
-    RED_OCP = redCycle;
-    GREEN_OCP = greenCycle;
-    BLUE_OCP = blueCycle;
 }
 
 void disablePWM(void)
@@ -172,9 +187,9 @@ void pulseEffect(void)
 {
     if (fadePhase & (PULSE_INCREASE | PULSE_DECREASE)) {
         fadeValue += fadePhase;
-        uint8_t redCycle = ((uint16_t)fadeValue * ledMask[0]) >> 8;
-        uint8_t greenCycle = ((uint16_t)fadeValue * ledMask[1]) >> 8;
-        uint8_t blueCycle = ((uint16_t)fadeValue * ledMask[2]) >> 8;
+        uint8_t redCycle = ((uint16_t)fadeValue * colorMask[0]) >> 8;
+        uint8_t greenCycle = ((uint16_t)fadeValue * colorMask[1]) >> 8;
+        uint8_t blueCycle = ((uint16_t)fadeValue * colorMask[2]) >> 8;
         setPWMDutyCycle(redCycle, greenCycle, blueCycle);
         /* Detect MAX and MIN */
         if (fadeValue == PULSE_MIN_BRIGHTNESS) {
@@ -194,9 +209,9 @@ void flashEffect(void)
 {
     fadeValue++;
     if (fadeValue == FLASH_DURATION) {
-        uint8_t redCycle = ((uint16_t)255 * ledMask[0]) >> 8;
-        uint8_t greenCycle = ((uint16_t)255 * ledMask[1]) >> 8;
-        uint8_t blueCycle = ((uint16_t)255 * ledMask[2]) >> 8;
+        uint8_t redCycle = ((uint16_t)255 * colorMask[0]) >> 8;
+        uint8_t greenCycle = ((uint16_t)255 * colorMask[1]) >> 8;
+        uint8_t blueCycle = ((uint16_t)255 * colorMask[2]) >> 8;
         enablePWM();
         setPWMDutyCycle(redCycle, greenCycle, blueCycle);
     } else if (fadeValue == (FLASH_DURATION * 2)) {
@@ -293,6 +308,79 @@ void rainbowEffect(void)
     }
 }
 
+/* @todo: moodLightEffect
+1) random color generator fn
+2) euclidean distance fn
+3) linear interpolation fn -- possible with only fixed point math?
+*/
+
+uint8_t randomColor(void)
+{
+    return (uint8_t)(rand() >> 8);
+}
+
+uint8_t calculateDistance(uint8_t start[3], uint8_t end[3])
+{
+uint16_t distance;
+    distance = (end[0] - start[0]) * (end[0] - start[0]) >> 2;
+    distance += (end[1] - start[1]) * (end[1] - start[1]) >> 2;
+    distance += (end[2] - start[2]) * (end[2] - start[2]) >> 2;
+    if (distance > 12096) {
+        return 255;
+    } else if (distance > 2976) {
+        return 127;
+    } else if (distance > 720) {
+        return 63;
+    } else if (distance > 168) {
+        return 31;
+    } else {
+        return 15;
+    }
+}
+
+uint8_t interpolate(uint8_t start, uint8_t end, uint8_t distance, uint8_t step)
+{
+    switch (distance) {
+        case 255:
+            return ((uint16_t)start * (256-step) + end * step) >> 8;
+        case 127:
+            return ((uint16_t)start * (128-step) + end * step) >> 7;
+        case 63:
+            return ((uint16_t)start * (64-step) + end * step) >> 6;
+        case 31:
+            return ((uint16_t)start * (32-step) + end * step) >> 5;
+        case 15:
+            return ((uint16_t)start * (16-step) + end * step) >> 4;
+        default:
+            return end;
+    }
+}
+
+void moodLightEffect(void)
+{
+static uint8_t i = 0;
+    if (i < 3) {
+        i++;
+        return;
+    }
+    i = 0;
+    if (fadeValue == fadePhase) {
+        colorMask[0] = nextColor[0];
+        colorMask[1] = nextColor[1];
+        colorMask[2] = nextColor[2];
+        nextColor[0] = randomColor();
+        nextColor[1] = randomColor();
+        nextColor[2] = randomColor();
+        // Store distance in fadePhase
+        fadePhase = calculateDistance(colorMask, nextColor);
+        // Store step in fadeValue
+        fadeValue = 0;
+    }
+    fadeValue++;
+    setPWMDutyCycle(interpolate(colorMask[0], nextColor[0], fadePhase, fadeValue), interpolate(colorMask[1], nextColor[1], fadePhase, fadeValue),interpolate(colorMask[2], nextColor[2], fadePhase, fadeValue));
+
+}
+
 /* --------------------------------- Main ---------------------------------- */
 
 int main(void)
@@ -333,9 +421,9 @@ uchar i;
                     enableFade();
                     fadePhase = PULSE_INCREASE;
                     fadeValue = PULSE_MIN_BRIGHTNESS;
-                    ledMask[0] = 30;
-                    ledMask[1] = 255;
-                    ledMask[2] = 10;
+                    colorMask[0] = 30;
+                    colorMask[1] = 255;
+                    colorMask[2] = 10;
                     fadeFunction = &pulseEffect;
                     break;
                 case CUSTOM_RQ_STATUS_AWAY:
@@ -343,9 +431,9 @@ uchar i;
                     enableFade();
                     fadePhase = PULSE_INCREASE;
                     fadeValue = PULSE_MIN_BRIGHTNESS;
-                    ledMask[0] = 255;
-                    ledMask[1] = 20;
-                    ledMask[2] = 10;
+                    colorMask[0] = 255;
+                    colorMask[1] = 20;
+                    colorMask[2] = 10;
                     fadeFunction = &pulseEffect;
                     // pulseOff
                     break;
@@ -354,9 +442,9 @@ uchar i;
                     enableFade();
                     fadePhase = PULSE_INCREASE;
                     fadeValue = PULSE_MIN_BRIGHTNESS;
-                    ledMask[0] = 170;
-                    ledMask[1] = 170;
-                    ledMask[2] = 170;
+                    colorMask[0] = 170;
+                    colorMask[1] = 170;
+                    colorMask[2] = 170;
                     fadeFunction = &pulseEffect;
                     // fast pulse
                     break;
@@ -365,9 +453,9 @@ uchar i;
                     turnOffLED();
                     enableFade();
                     fadeValue = FLASH_DURATION - 1; /* LED will turn on next time flashEffect is called */
-                    ledMask[0] = 255;
-                    ledMask[1] = 0;
-                    ledMask[2] = 0;
+                    colorMask[0] = 255;
+                    colorMask[1] = 0;
+                    colorMask[2] = 0;
                     fadeFunction = &flashEffect;
                     break;
                 case CUSTOM_RQ_RAINBOW:
@@ -375,7 +463,10 @@ uchar i;
                     enableFade();
                     fadePhase = 0;
                     fadeValue = 0;
-                    fadeFunction = &rainbowEffect;
+                    nextColor[0] = 0;
+                    nextColor[1] = 0;
+                    nextColor[2] = 0;
+                    fadeFunction = &moodLightEffect;
                 default:
                     break;
             }
