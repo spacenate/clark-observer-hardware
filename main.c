@@ -30,11 +30,10 @@
 #define GREEN_OCP OCR0A
 #define BLUE_OCP OCR0B
 
-void (* fadeFunction)(void);
 volatile uint8_t fadeTick;
 uint8_t fadePhase;
 uint8_t fadeValue;
-uint8_t pauseValue;
+
 uint8_t colorMask[3];
 uint8_t nextColor[3];
 
@@ -185,6 +184,8 @@ ISR(TIMER1_OVF_vect)
 
 void pulseEffect(void)
 {
+static uint8_t pauseValue;
+
     if (fadePhase & (PULSE_INCREASE | PULSE_DECREASE)) {
         fadeValue += fadePhase;
         uint8_t redCycle = ((uint16_t)fadeValue * colorMask[0]) >> 8;
@@ -325,10 +326,8 @@ uint16_t distance;
         return 127;
     } else if (distance > 720) {
         return 63;
-    } else if (distance > 168) {
-        return 31;
     } else {
-        return 15;
+        return 31;
     }
 }
 
@@ -343,24 +342,21 @@ uint8_t interpolate(uint8_t start, uint8_t end, uint8_t distance, uint8_t step)
             return ((uint16_t)start * (64-step) + end * step) >> 6;
         case 31:
             return ((uint16_t)start * (32-step) + end * step) >> 5;
-        case 15:
-            return ((uint16_t)start * (16-step) + end * step) >> 4;
         default:
             return end;
     }
 }
 
-void increaseNextColorSaturation(void)
+void increaseColorSaturation(uint8_t *color)
 {
 uint8_t i;
-uint8_t *min = &nextColor[0];
-uint8_t *max = &nextColor[0];
-
+uint8_t *min = &color[0];
+uint8_t *max = &color[0];
     for (i = 1; i < 3; i++) {
-        if (nextColor[i] < *min) {
-            min = &nextColor[i];
-        } else if (nextColor[i] > *max) {
-            max = &nextColor[i];
+        if (color[i] < *min) {
+            min = &color[i];
+        } else if (color[i] > *max) {
+            max = &color[i];
         }
     }
     if ((*max - *min) < 128) {
@@ -383,7 +379,7 @@ static uint8_t i = 0;
         nextColor[0] = randomColor();
         nextColor[1] = randomColor();
         nextColor[2] = randomColor();
-        increaseNextColorSaturation();
+        increaseColorSaturation(nextColor);
         // Store distance in fadePhase
         fadePhase = calculateDistance(colorMask, nextColor);
         // Store step in fadeValue
@@ -398,7 +394,8 @@ static uint8_t i = 0;
 
 int main(void)
 {
-uchar i;
+uint8_t i;
+void (* fadeFunction)(void);
 
     initTimers();
     initLED();
