@@ -367,7 +367,7 @@ uint8_t *max = &color[0];
 void moodLightEffect(void)
 {
 static uint8_t i = 0;
-    if (i < 4) {
+    if (i < 5) {
         i++;
         return;
     }
