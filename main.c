@@ -350,6 +350,24 @@ uint8_t interpolate(uint8_t start, uint8_t end, uint8_t distance, uint8_t step)
     }
 }
 
+void increaseNextColorSaturation(void)
+{
+uint8_t i;
+uint8_t *min = &nextColor[0];
+uint8_t *max = &nextColor[0];
+
+    for (i = 1; i < 3; i++) {
+        if (nextColor[i] < *min) {
+            min = &nextColor[i];
+        } else if (nextColor[i] > *max) {
+            max = &nextColor[i];
+        }
+    }
+    if ((*max - *min) < 128) {
+        *min = 0;
+    }
+}
+
 void moodLightEffect(void)
 {
 static uint8_t i = 0;
@@ -365,6 +383,7 @@ static uint8_t i = 0;
         nextColor[0] = randomColor();
         nextColor[1] = randomColor();
         nextColor[2] = randomColor();
+        increaseNextColorSaturation();
         // Store distance in fadePhase
         fadePhase = calculateDistance(colorMask, nextColor);
         // Store step in fadeValue
