@@ -1,5 +1,9 @@
 # Olark Observer Hardware
-USB Vendor class device implementation using V-USB on the ATtiny85
+USB Vendor class device implementation using V-USB on the ATtiny85.
+
+To accommodate a common-cathod RGB LED with PWM for each RGB channel, the following schematic should be adjusted as follows:
+USB D- to PB2, D+ to PB3, common cathode RGB LED with red to PB4, green to PB0, and blue to PB1
+
 
 ![Hardware schematic](schematic.png)
 
